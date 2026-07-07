@@ -4,23 +4,23 @@ import Navbar from "../components/Navbar";
 import TitleModal from "../components/TitleModal";
 import TitleRow from "../components/TitleRow";
 import { useAppData } from "../context/AppDataContext";
-import { catalog } from "../data/catalog";
+import { allTitles, catalog } from "../data/catalog";
 
 export default function BrowsePage() {
   const { myList, addToMyList, removeFromMyList, trackWatch } = useAppData();
   const [selectedTitle, setSelectedTitle] = useState(null);
 
-  const heroTitle = catalog[0].items[0];
+  const heroTitles = allTitles.slice(0, 5);
   const myListIds = useMemo(() => new Set(myList.map((item) => item.titleId)), [myList]);
 
   return (
     <div className="page-shell">
       <Navbar />
       <HeroBanner
-        title={heroTitle}
+        titles={heroTitles}
         onOpen={setSelectedTitle}
         onAdd={addToMyList}
-        inList={myListIds.has(heroTitle.id)}
+        myListIds={myListIds}
       />
       <main>
         {catalog.map((row) => (

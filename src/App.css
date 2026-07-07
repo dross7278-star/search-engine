@@ -77,10 +77,29 @@
 }
 
 .hero {
-  min-height: min(72vh, 680px);
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-slides {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-slide {
+  position: absolute;
+  inset: 0;
   background-size: cover;
   background-position: center;
-  position: relative;
+  opacity: 0;
+  transform: scale(1.12);
+  transition: opacity 1800ms ease;
+}
+
+.hero-slide.active {
+  opacity: 1;
+  animation: heroKenBurns 6200ms ease-out forwards;
 }
 
 .hero::before {
@@ -96,9 +115,36 @@
   position: relative;
   z-index: 2;
   max-width: 48rem;
-  padding: 12vh 1.5rem 2rem;
+  min-height: 100vh;
+  padding: 14vh 1.5rem 2.2rem;
+  display: grid;
+  align-content: space-between;
+  gap: 1rem;
+}
+
+.hero-copy {
   display: grid;
   gap: 1rem;
+  animation: heroCopyIn 500ms ease;
+}
+
+.hero-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.hero-dots button {
+  width: 2.2rem;
+  height: 0.32rem;
+  border: 0;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+}
+
+.hero-dots button.active {
+  background: var(--red);
 }
 
 .hero-tag {
@@ -409,6 +455,38 @@
   }
 }
 
+@keyframes heroCopyIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroKenBurns {
+  from {
+    transform: scale(1.12);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-slide,
+  .hero-slide.active,
+  .hero-copy {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
+
 @media (max-width: 800px) {
   .top-nav {
     flex-wrap: wrap;
@@ -428,7 +506,8 @@
   }
 
   .hero-overlay {
-    padding-top: 8vh;
+    min-height: 84vh;
+    padding-top: 10vh;
   }
 
   .row-grid,
