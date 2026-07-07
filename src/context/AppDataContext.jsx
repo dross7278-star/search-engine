@@ -10,12 +10,33 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, hasFirebaseConfig } from "../firebase";
 import { useAuth } from "./AuthContext";
 
 const AppDataContext = createContext(null);
 
 const ACTIVE_PROFILE_KEY = "netflix-active-profile";
+
+function getLocalStateKey(uid) {
+  return `netplix-local-data-${uid}`;
+}
+
+function readLocalState(uid) {
+  const raw = localStorage.getItem(getLocalStateKey(uid));
+  if (!raw) {
+    return { profiles: [], myList: [], history: [] };
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { profiles: [], myList: [], history: [] };
+  }
+}
+
+function writeLocalState(uid, data) {
+  localStorage.setItem(getLocalStateKey(uid), JSON.stringify(data));
+}
 
 export function AppDataProvider({ children }) {
   const { user } = useAuth();
@@ -42,7 +63,7 @@ export function AppDataProvider({ children }) {
   }, [activeProfileId]);
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadFirebaseData = async () => {
       if (!user) {
         setProfiles([]);
         setMyList([]);
@@ -79,7 +100,6 @@ export function AppDataProvider({ children }) {
       }
 
       setProfiles(profileDocs);
-
       if (!profileDocs.some((profile) => profile.id === activeProfileId)) {
         setActiveProfileId(profileDocs[0].id);
       }
@@ -94,9 +114,41 @@ export function AppDataProvider({ children }) {
       setLoadingData(false);
     };
 
-    loadData().catch(() => {
+    const loadLocalData = () => {
+      if (!user) {
+        setProfiles([]);
+        setMyList([]);
+        setHistory([]);
+        setActiveProfileId("");
+        setLoadingData(false);
+        return;
+      }
+
+      const data = readLocalState(user.uid);
+      const profileDocs = data.profiles.length
+        ? data.profiles
+        : [{ id: crypto.randomUUID(), name: "Main Profile", avatar: "🎬" }];
+
+      setProfiles(profileDocs);
+      if (!profileDocs.some((profile) => profile.id === activeProfileId)) {
+        setActiveProfileId(profileDocs[0].id);
+      }
+
+      setMyList(data.myList ?? []);
+      setHistory(data.history ?? []);
+      writeLocalState(user.uid, {
+        profiles: profileDocs,
+        myList: data.myList ?? [],
+        history: data.history ?? [],
+      });
       setLoadingData(false);
-    });
+    };
+
+    if (hasFirebaseConfig) {
+      loadFirebaseData().catch(() => setLoadingData(false));
+    } else {
+      loadLocalData();
+    }
   }, [user]);
 
   const createProfile = async (name, avatar) => {
@@ -104,13 +156,16 @@ export function AppDataProvider({ children }) {
       return;
     }
 
-    const profileId = crypto.randomUUID();
-    const profile = {
-      name,
-      avatar,
-      createdAt: serverTimestamp(),
-    };
+    if (!hasFirebaseConfig) {
+      const profile = { id: crypto.randomUUID(), name, avatar };
+      const nextProfiles = [...profiles, profile];
+      setProfiles(nextProfiles);
+      writeLocalState(user.uid, { profiles: nextProfiles, myList, history });
+      return;
+    }
 
+    const profileId = crypto.randomUUID();
+    const profile = { name, avatar, createdAt: serverTimestamp() };
     await setDoc(doc(db, "users", user.uid, "profiles", profileId), profile);
     setProfiles((prev) => [...prev, { id: profileId, name, avatar }]);
   };
@@ -131,13 +186,26 @@ export function AppDataProvider({ children }) {
       return;
     }
 
+    if (!hasFirebaseConfig) {
+      const entry = {
+        id: crypto.randomUUID(),
+        titleId: title.id,
+        title,
+        profileId: activeProfileId,
+        createdAt: { seconds: Date.now() / 1000 },
+      };
+      const nextList = [...myList, entry];
+      setMyList(nextList);
+      writeLocalState(user.uid, { profiles, myList: nextList, history });
+      return;
+    }
+
     const listDoc = {
       titleId: title.id,
       title,
       profileId: activeProfileId,
       createdAt: serverTimestamp(),
     };
-
     const listRef = collection(db, "users", user.uid, "myList");
     const docRef = await addDoc(listRef, listDoc);
     setMyList((prev) => [...prev, { id: docRef.id, ...listDoc }]);
@@ -145,6 +213,15 @@ export function AppDataProvider({ children }) {
 
   const removeFromMyList = async (titleId) => {
     if (!user) {
+      return;
+    }
+
+    if (!hasFirebaseConfig) {
+      const nextList = myList.filter(
+        (item) => !(item.titleId === titleId && item.profileId === activeProfileId)
+      );
+      setMyList(nextList);
+      writeLocalState(user.uid, { profiles, myList: nextList, history });
       return;
     }
 
@@ -157,16 +234,27 @@ export function AppDataProvider({ children }) {
         .filter((listDoc) => listDoc.data().profileId === activeProfileId)
         .map((listDoc) => deleteDoc(doc(db, "users", user.uid, "myList", listDoc.id)))
     );
-    setMyList(
-      (prev) =>
-        prev.filter(
-          (item) => !(item.titleId === titleId && item.profileId === activeProfileId)
-        )
+    setMyList((prev) =>
+      prev.filter((item) => !(item.titleId === titleId && item.profileId === activeProfileId))
     );
   };
 
   const trackWatch = async (title) => {
     if (!user) {
+      return;
+    }
+
+    if (!hasFirebaseConfig) {
+      const entry = {
+        id: crypto.randomUUID(),
+        titleId: title.id,
+        profileId: activeProfileId,
+        title,
+        watchedAt: { seconds: Date.now() / 1000 },
+      };
+      const nextHistory = [entry, ...history];
+      setHistory(nextHistory);
+      writeLocalState(user.uid, { profiles, myList, history: nextHistory });
       return;
     }
 
@@ -176,7 +264,6 @@ export function AppDataProvider({ children }) {
       title,
       watchedAt: serverTimestamp(),
     };
-
     const historyRef = collection(db, "users", user.uid, "history");
     await addDoc(historyRef, entry);
     setHistory((prev) => [
@@ -198,6 +285,7 @@ export function AppDataProvider({ children }) {
       history: scopedHistory,
       trackWatch,
       loadingData,
+      usingFirebase: hasFirebaseConfig,
     }),
     [
       profiles,
@@ -214,10 +302,8 @@ export function AppDataProvider({ children }) {
 
 export function useAppData() {
   const context = useContext(AppDataContext);
-
   if (!context) {
     throw new Error("useAppData must be used inside AppDataProvider");
   }
-
   return context;
 }
