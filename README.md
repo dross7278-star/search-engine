@@ -59,6 +59,25 @@ npm run build
 npm run preview
 ```
 
+## Production Firebase On GitHub Pages
+
+Use GitHub repository secrets so Firebase config is injected only during the build:
+
+1. Open repository secrets:
+- `Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret`
+2. Create these secrets exactly:
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+3. Push to `main` (or re-run the `Deploy To GitHub Pages` workflow).
+4. Verify the live site:
+- `https://dross7278-star.github.io/search-engine/`
+
+If secrets are missing, the app still runs in local demo mode (fallback) so the UI remains usable.
+
 ## Save To Main GitHub Branch
 
 Run from project root:
